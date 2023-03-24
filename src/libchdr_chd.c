@@ -1349,6 +1349,8 @@ static chd_error decompress_v5_map(chd_file* chd, chd_header* header)
 	if (!chd_compressed(header))
 	{
 		header->rawmap = (uint8_t*)malloc(rawmapsize);
+		if (header->rawmap == NULL)
+			return CHDERR_OUT_OF_MEMORY;
 		core_fseek(chd->file, header->mapoffset, SEEK_SET);
 		result = core_fread(chd->file, header->rawmap, rawmapsize);
 		return CHDERR_NONE;
@@ -1366,10 +1368,18 @@ static chd_error decompress_v5_map(chd_file* chd, chd_header* header)
 
 	/* now read the map */
 	compressed_ptr = (uint8_t*)malloc(sizeof(uint8_t) * mapbytes);
+	if (compressed_ptr == NULL)
+		return CHDERR_OUT_OF_MEMORY;
 	core_fseek(chd->file, header->mapoffset + 16, SEEK_SET);
 	result = core_fread(chd->file, compressed_ptr, mapbytes);
 	bitbuf = create_bitstream(compressed_ptr, sizeof(uint8_t) * mapbytes);
 	header->rawmap = (uint8_t*)malloc(rawmapsize);
+	if (header->rawmap == NULL)
+	{
+		free(compressed_ptr);
+		free(bitbuf);
+		return CHDERR_OUT_OF_MEMORY;
+	}
 
 	/* first decode the compression types */
 	decoder = create_huffman_decoder(16, 8);
@@ -2311,6 +2321,8 @@ static chd_error header_read(chd_file *chd, chd_header *header)
 		header->mapoffset       = get_bigendian_uint64(&rawheader[40]);
 		header->metaoffset      = get_bigendian_uint64(&rawheader[48]);
 		header->hunkbytes       = get_bigendian_uint32(&rawheader[56]);
+		if (header->hunkbytes == 0)
+			return CHDERR_INVALID_DATA;
 		header->hunkcount       = (header->logicalbytes + header->hunkbytes - 1) / header->hunkbytes;
 		header->unitbytes       = get_bigendian_uint32(&rawheader[60]);
 		header->unitcount       = (header->logicalbytes + header->unitbytes - 1) / header->unitbytes;

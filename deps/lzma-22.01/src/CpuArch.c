@@ -415,7 +415,7 @@ BoolInt CPU_IsSupported_AES (void) { return APPLE_CRYPTO_SUPPORT_VAL; }
 
 #else // __APPLE__
 
-#if defined(__SWITCH__)
+#if defined(__SWITCH__) || defined(__vita__)
 
 BoolInt CPU_IsSupported_CRC32(void) { return 0; }
 BoolInt CPU_IsSupported_NEON(void) { return 1; }

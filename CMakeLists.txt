@@ -7,6 +7,7 @@ if(CMAKE_PROJECT_NAME STREQUAL "chdr")
 endif()
 option(INSTALL_STATIC_LIBS "Install static libraries" OFF)
 option(WITH_SYSTEM_ZLIB "Use system provided zlib library" OFF)
+option(WITH_SYSTEM_ZSTD "Use system provided zstd library" OFF)
 
 option(BUILD_LTO "Compile libchdr with link-time optimization if supported" OFF)
 if(BUILD_LTO)
@@ -17,6 +18,14 @@ if(BUILD_LTO)
   endif()
 endif()
 
+option(BUILD_FUZZER "Build instrumented binary for fuzzing with libfuzzer, requires clang")
+if(BUILD_FUZZER)
+  # Override CFLAGS early for instrumentation. Disable shared libs for instrumentation.
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address,fuzzer-no-link")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,fuzzer-no-link")
+  set(BUILD_SHARED_LIBS OFF)
+endif()
+
 include(GNUInstallDirs)
 
 #--------------------------------------------------
@@ -25,7 +34,7 @@ include(GNUInstallDirs)
 
 
 # lzma
-add_subdirectory(deps/lzma-22.01 EXCLUDE_FROM_ALL)
+add_subdirectory(deps/lzma-24.05 EXCLUDE_FROM_ALL)
   list(APPEND CHDR_LIBS lzma)
   list(APPEND CHDR_INCLUDES lzma)
 
@@ -34,11 +43,23 @@ if (WITH_SYSTEM_ZLIB)
   find_package(ZLIB REQUIRED)
   list(APPEND PLATFORM_LIBS ZLIB::ZLIB)
 else()
-  add_subdirectory(deps/zlib-1.2.12 EXCLUDE_FROM_ALL)
-  list(APPEND CHDR_LIBS zlib)
-  list(APPEND CHDR_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib-1.2.12" "${CMAKE_CURRENT_BINARY_DIR}/deps/zlib-1.2.12")
+  option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
+  add_subdirectory(deps/zlib-1.3.1 EXCLUDE_FROM_ALL)
+  set_target_properties(zlibstatic PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  list(APPEND CHDR_LIBS zlibstatic)
 endif()
 
+# zstd
+if (WITH_SYSTEM_ZSTD)
+  find_package(zstd REQUIRED)
+  list(APPEND PLATFORM_LIBS zstd::libzstd_shared)
+else()
+  option(ZSTD_BUILD_SHARED "BUILD SHARED LIBRARIES" OFF)
+  option(ZSTD_BUILD_PROGRAMS "BUILD PROGRAMS" OFF)
+  option(ZSTD_LEGACY_SUPPORT "LEGACY SUPPORT" OFF)
+  add_subdirectory(deps/zstd-1.5.6/build/cmake EXCLUDE_FROM_ALL)
+  list(APPEND CHDR_LIBS libzstd_static)
+endif()
 #--------------------------------------------------
 # chdr
 #--------------------------------------------------
@@ -78,6 +99,8 @@ if (BUILD_SHARED_LIBS)
     target_compile_definitions(chdr PRIVATE _CRT_SECURE_NO_WARNINGS)
   elseif(APPLE)
     target_link_libraries(chdr PRIVATE -Wl,-dead_strip -Wl,-exported_symbol,_chd_*)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL OpenBSD)
+    target_link_libraries(chdr PRIVATE -Wl,--version-script ${CMAKE_CURRENT_SOURCE_DIR}/src/link.T)
   else()
     target_link_libraries(chdr PRIVATE -Wl,--version-script ${CMAKE_CURRENT_SOURCE_DIR}/src/link.T -Wl,--no-undefined)
   endif()

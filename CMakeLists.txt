@@ -39,7 +39,9 @@ add_subdirectory(deps/lzma-24.05 EXCLUDE_FROM_ALL)
   list(APPEND CHDR_INCLUDES lzma)
 
 # zlib
-if (WITH_SYSTEM_ZLIB)
+if(TARGET zlibstatic)
+  list(APPEND CHDR_LIBS zlibstatic)
+elseif (WITH_SYSTEM_ZLIB)
   find_package(ZLIB REQUIRED)
   list(APPEND PLATFORM_LIBS ZLIB::ZLIB)
 else()
@@ -50,7 +52,9 @@ else()
 endif()
 
 # zstd
-if (WITH_SYSTEM_ZSTD)
+if(TARGET libzstd_static)
+  list(APPEND CHDR_LIBS libzstd_static)
+elseif (WITH_SYSTEM_ZSTD)
   find_package(zstd REQUIRED)
   list(APPEND PLATFORM_LIBS zstd::libzstd_shared)
 else()
